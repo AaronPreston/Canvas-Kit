@@ -48,7 +48,9 @@ Game = {
         SPACE: false,
         ESC: false,
         ENTER: false
-    }
+    },
+
+    fps: fps(60) 
 
 };
 
@@ -126,7 +128,20 @@ class GameObject {
         this.y = _y;
         this.width = _width;
         this.height = _height;
+        this.canCollide = false;
+        this.velocity = 0;
         Game.objects[Game.objects.length] = this;
+
+        this.memory = {};
+
+        this.move = {
+            enabled: {
+                up: true,
+                down: true,
+                left: true,
+                right: true
+            }
+        };
 
         /*
         do {
@@ -146,7 +161,6 @@ class GameObject {
         */
 
     }
-
     
 }
 
@@ -180,19 +194,73 @@ Object.defineProperty(GameObject.prototype, "canCollide", {
     set: function(value){ this._canCollide = value }
 });
 
+Object.defineProperty(GameObject.prototype, "velocity", {
+    get: function(){ return this._velocity },
+    set: function(value){ this._velocity = value }
+});
+
+Object.defineProperty(GameObject.prototype, "move", {
+    get: function(){ return this._move },
+    set: function(value){ this._move = value }
+});
+
+Object.defineProperty(GameObject.prototype, "memory", {
+    get: function(){ return this._memory },
+    set: function(value){ this._memory = value }
+});
+
 
 Phy = {
     
     doesCollide: function(objOne, objTwo) {
-        if(objOne.x + objOne.width > objTwo.x && objOne.y + objOne.height > objTwo.y && 
-            objOne.x < objTwo.x + objTwo.width && objOne.y < objTwo.y + objTwo.height) {
-            // Object One collided with Object Two
-            return true;
-        } else if(objTwo.x + objTwo.width > objOne.x && objTwo.y + objTwo.height > objOne.y &&
-                objTwo.x < objOne.x + objOne.width && objTwo.y < objOne.y + objOne.height) {
-            // Object Two collided with Object One
-            return true;
+        if(objOne.canCollide && objTwo.canCollide) {
+            if(objOne.x + objOne.width > objTwo.x && objOne.y + objOne.height > objTwo.y && 
+                objOne.x < objTwo.x + objTwo.width && objOne.y < objTwo.y + objTwo.height) {
+                // Object One collided with Object Two
+                return true;
+            }
+            
+            if(objTwo.x + objTwo.width > objOne.x && objTwo.y + objTwo.height > objOne.y &&
+                    objTwo.x < objOne.x + objOne.width && objTwo.y < objOne.y + objOne.height) {
+                // Object Two collided with Object One
+                return true;
+            }
         }
+
+        return false;
+    },
+
+    sideCollided: function(objOne, objTwo) {
+
+        objOne.x -= Point.value * 1;
+
+        objOne.x += Point.value * 2;
+        if(this.doesCollide(objOne, objTwo)) {
+            objOne.x -= Point.value * 1;
+            return "LEFT";
+        }
+        objOne.x -= Point.value * 1;
+
+        objOne.x -= Point.value * 1;
+        if(this.doesCollide(objOne, objTwo)) {
+            objOne.x += Point.value * 1;
+            return "RIGHT";
+        }
+        objOne.x += Point.value * 1;
+
+        objOne.y += Point.value * 1;
+        if(this.doesCollide(objOne, objTwo)) {
+            objOne.y -= Point.value * 1;
+            return "TOP";
+        }
+        objOne.y -= Point.value * 1;
+
+        objOne.y -= Point.value * 1;
+        if(this.doesCollide(objOne, objTwo)) {
+            objOne.y += Point.value * 1;
+            return "BOTTOM";
+        }
+        objOne.y += Point.value * 1;
 
         return false;
     },
@@ -200,11 +268,15 @@ Phy = {
     moveObject: function(obj, distance, direction) {
 
         if(direction.toUpperCase() === "UP" || direction.toUpperCase() == "NORTH") {
-            for(a = 0; a < distance; a++) {
-                obj.y -= Point.value * 1;
-                for(i = 0; i < Game.objects.length; i++) {
-                    if(!(obj.id === Game.objects[i].id) && this.doesCollide(obj, Game.objects[i])) {
-                        obj.y += Point.value * 1;
+            if(obj.move.enabled.up) {
+                for(a = 0; a < distance; a++) {
+                    obj.y -= Point.value * 1;
+                    obj.velocity = a;
+                        for(i = 0; i < Game.objects.length; i++) {
+                            if(!(obj.id === Game.objects[i].id) && this.sideCollided(obj, Game.objects[i]) === "BOTTOM") {
+                                obj.y += Point.value * 1;
+                                obj.velocity = 0;  
+                            }
                     }
                 }
             }
@@ -213,9 +285,11 @@ Phy = {
         if(direction.toUpperCase() === "RIGHT" || direction.toUpperCase() == "EAST") {
             for(a = 0; a < distance; a++) {
                 obj.x += Point.value * 1;
+                obj.velocity = a;
                 for(i = 0; i < Game.objects.length; i++) {
-                    if(!(obj.id === Game.objects[i].id) && this.doesCollide(obj, Game.objects[i])) {
+                    if(!(obj.id === Game.objects[i].id) && this.sideCollided(obj, Game.objects[i]) === "LEFT" && obj.move.enabled.right) {
                         obj.x -= Point.value * 1;
+                        obj.velocity = 0;  
                     }
                 }
             }
@@ -224,9 +298,11 @@ Phy = {
         if(direction.toUpperCase() === "DOWN" || direction.toUpperCase() == "SOUTH") {
             for(a = 0; a < distance; a++) {
                 obj.y += Point.value * 1;
+                obj.velocity = a;
                 for(i = 0; i < Game.objects.length; i++) {
-                    if(!(obj.id === Game.objects[i].id) && this.doesCollide(obj, Game.objects[i])) {
+                    if(!(obj.id === Game.objects[i].id) && this.sideCollided(obj, Game.objects[i]) === "TOP" && obj.move.enabled.down) {
                         obj.y -= Point.value * 1;
+                        obj.velocity = 0;  
                     }
                 }
             }
@@ -235,18 +311,41 @@ Phy = {
         if(direction.toUpperCase() === "LEFT" || direction.toUpperCase() == "WEST") {
             for(a = 0; a < distance; a++) {
                 obj.x -= Point.value * 1;
+                obj.velocity = a;
                 for(i = 0; i < Game.objects.length; i++) {
-                    if(!(obj.id === Game.objects[i].id) && this.doesCollide(obj, Game.objects[i])) {
+                    if(!(obj.id === Game.objects[i].id) && this.sideCollided(obj, Game.objects[i]) === "RIGHT" && obj.move.enabled.left) {
                         obj.x += Point.value * 1;
+                        obj.velocity = 0;  
                     }
                 }
             }
         }
+    },
+
+    applyGravity: function(obj, gravityValue) {
+        obj.move.enabled.up = false;
+        this.moveObject(obj, gravityValue, "DOWN");
+    },
+
+    objectJump: function(obj, jumpValue, jumpWait) {
+        if(jumpWait === undefined) {
+            jumpWait = 30;
+        }
+        if(obj.memory.lastJump === undefined || Game.iterationCount - obj.memory.lastJump > jumpWait) {
+            obj.memory.lastJump = Game.iterationCount;
+            obj.move.enabled.up = true;
+            obj.velocity = jumpValue;
+            this.moveObject(obj, jumpValue, "UP");
+        }
     }
-}
+};
 
 
 function libUpdate() { // Used to keep updated with game engine. This happens every time the engine loops.
+
+    for(x = 0; x < Game.objects.length; x++) {
+        Game.objects[x].velocity = 0;
+    } 
     Point.value = (((window.innerWidth + window.innerHeight) / 2) / 1000);
     Game.window.width = Game.window.height * (Game.window.clientWidth / Game.window.clientHeight);
 }

@@ -40,16 +40,15 @@ setInterval(function() {
         }
     
         catch(e) {
-            console.log(e);
             Game.active = false;
+            end();
         }
     } else {
 
         end();
 
-        clearScreen();
 
         
     }
 
-}, fps(60));
+}, Game.fps);
